@@ -41,7 +41,7 @@ def imshow(inp, title=None):
         plt.title(title)
     plt.pause(0.001)  # pause a bit so that plots are updated
 
-def train_model(model, criterion, optimizer, lr_scheduler,dset_loaders,use_gpu=True, num_epochs=25,batch_size=4,num_log=100):
+def train_model(model, criterion, optimizer, lr_scheduler,dset_loaders,dset_sizes,writer,use_gpu=True, num_epochs=25,batch_size=4,num_log=100):
     since = time.time()
 
     best_model = model
@@ -63,6 +63,7 @@ def train_model(model, criterion, optimizer, lr_scheduler,dset_loaders,use_gpu=T
             running_loss = 0.0
             running_corrects = 0
             running_cir1=0
+            running_hist=np.zeros(9)
 
             # Iterate over data.
             for data in dset_loaders[phase]:
@@ -102,11 +103,23 @@ def train_model(model, criterion, optimizer, lr_scheduler,dset_loaders,use_gpu=T
                 running_loss += loss.data[0]
                 running_corrects += torch.sum(preds == labels.data)
                 running_cir1 += torch.sum(torch.abs(preds - labels.data)<=1)
+                for k in range(9):
+                    if(torch.sum(labels.data==k)>0):
+                        running_hist[k] += torch.sum(torch.abs(preds[labels.data==k] - k)<=1)/torch.sum(labels.data==k)
+                
+                
 
             epoch_loss = running_loss / dset_sizes[phase]
             epoch_acc = running_corrects / dset_sizes[phase]
             epoch_cir1 = running_cir1 / dset_sizes[phase]
+            epoch_hist = running_hist
+            writer.add_scalar(phase+' loss',epoch_loss,epoch)
+            writer.add_scalar(phase+' accuracy',epoch_acc,epoch)
+            writer.add_scalar(phase+' CIR-1',epoch_cir1,epoch)
+            writer.add_histogram(phase+' Histogram',epoch_hist,epoch)
 
+
+			
             print('{} Loss: {:.4f} Acc: {:.4f} CIR-1: {:.4f}'.format(
                 phase, epoch_loss, epoch_acc, epoch_cir1))
 
