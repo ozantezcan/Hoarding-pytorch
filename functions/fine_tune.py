@@ -83,7 +83,16 @@ def train_model(model, criterion, optimizer, lr_scheduler,dset_loaders,dset_size
                 # forward
                 outputs = model(inputs)
                 _, preds = torch.max(outputs.data, 1)
-                loss = criterion(outputs, labels)
+
+                labels_multi=[]
+                for label in labels.data:
+                    label_multi=np.zeros(11)
+                    label_multi[label:label+3]=1
+                    label_multi=label_multi[1:-1]
+                    labels_multi.append(label_multi)
+                labelsv = Variable(torch.FloatTensor(labels_multi).cuda()).view(-1,9)
+
+                loss = criterion(outputs, labelsv)
 
                 # backward + optimize only if in training phase
                 if phase == 'train':
