@@ -41,7 +41,11 @@ def imshow(inp, title=None):
         plt.title(title)
     plt.pause(0.001)  # pause a bit so that plots are updated
 
+<<<<<<< HEAD
+def train_model(model, criterion, optimizer,dset_loaders,dset_sizes,writer, lr_scheduler=None,use_gpu=True, num_epochs=25,batch_size=4,num_log=100,init_lr=0.001):
+=======
 def train_model(model, criterion, optimizer, lr_scheduler,dset_loaders,dset_sizes,writer,use_gpu=True, num_epochs=25,batch_size=4,num_log=100):
+>>>>>>> 7bc07c3e444b6249af57f138626e96d4fa2e9284
     since = time.time()
 
     best_model = model
@@ -55,7 +59,8 @@ def train_model(model, criterion, optimizer, lr_scheduler,dset_loaders,dset_size
         for phase in ['train', 'val']:
             if phase == 'train':
                 batch_count=0
-                optimizer = lr_scheduler(optimizer, epoch)
+                if lr_scheduler is not None:
+                    optimizer = lr_scheduler(optimizer, epoch,init_lr=init_lr)
                 model.train(True)  # Set model to training mode
             else:
                 model.train(False)  # Set model to evaluate mode

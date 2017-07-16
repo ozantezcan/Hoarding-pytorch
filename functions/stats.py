@@ -19,16 +19,19 @@ from torchsample.transforms import RangeNorm
 
 
 def im2torchNorm(imdir,mean = np.array([0.485, 0.456, 0.406]),std = np.array([0.229, 0.224, 0.225])\
-                 ,imsize=(224,224),imMax=255.):
+                 ,imsize=(256,256),imMax=255.):
     im = Image.open(imdir)
-    im.thumbnail(imsize, Image.ANTIALIAS) # resizes image in-place
+    im = im.resize(imsize)#, Image.ANTIALIAS) # resizes image in-place
     im=np.asarray(im).astype(np.float)/imMax
+    im=im[16:240,16:240,:]
     im_norm=(im-mean)/std
     return im_norm
 
-def subsetCreator(rootdir,im_per_room=10):
-    subdirs=os.listdir(rootdir)
-    roomdirs=['//BR//','//Kitchen//','//LR//']
+def subsetCreator(rootdir,im_per_room=10,roomdirs=['//BR//','//Kitchen//','//LR//'],multi_dir=True):
+    if(multi_dir):
+    	subdirs=os.listdir(rootdir)
+    else:
+        subdirs=['']
     imdirs=[]
     cir=[]
     room=[]
@@ -46,7 +49,7 @@ def subsetCreator(rootdir,im_per_room=10):
                         house.append(hme+1)
                         room.append(rm+1)
                         cir.append(cr+1)
-    return imdirs, cir, house, room
+    return np.asarray(imdirs), np.asarray(cir), np.asarray(house), np.asarray(room)
 
 def torchFromDirs(imdirs,im_dims=[224,224,3],begin_idx=0,batch_size=16):
     if len(imdirs)<begin_idx:
@@ -59,6 +62,27 @@ def torchFromDirs(imdirs,im_dims=[224,224,3],begin_idx=0,batch_size=16):
 
     im_torch=Variable(torch.from_numpy(imgs.transpose(0,3,1,2)).cuda()).float()
     return im_torch
+
+def class_based_cirs(label,pred):
+    cirs=np.zeros(10)
+    cir1s=np.zeros(10)
+    cir2s=np.zeros(10)
+
+    for k in range(9):
+        cir=k+1
+        idxs= label==cir
+        label_cir=label[idxs]
+        pred_cir=pred[idxs]
+        err=np.abs(label_cir-pred_cir)
+        cirs[k]=np.mean(err<=0)
+        cir1s[k]=np.mean(err<=1)
+        cir2s[k]=np.mean(err<=2)
+
+    err=np.abs(label-pred)
+    cirs[9]=np.mean(err<=0)
+    cir1s[9]=np.mean(err<=1)
+    cir2s[9]=np.mean(err<=2)
+    return cirs,cir1s,cir2s
 
 def extractFeats(imdirs,network,batchsize=16,outsize=512):
     fvec=np.zeros([len(imdirs),outsize])
