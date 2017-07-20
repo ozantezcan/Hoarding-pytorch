@@ -41,11 +41,9 @@ def imshow(inp, title=None):
         plt.title(title)
     plt.pause(0.001)  # pause a bit so that plots are updated
 
-<<<<<<< HEAD
-def train_model(model, criterion, optimizer,dset_loaders,dset_sizes,writer, lr_scheduler=None,use_gpu=True, num_epochs=25,batch_size=4,num_log=100,init_lr=0.001):
-=======
-def train_model(model, criterion, optimizer, lr_scheduler,dset_loaders,dset_sizes,writer,use_gpu=True, num_epochs=25,batch_size=4,num_log=100):
->>>>>>> 7bc07c3e444b6249af57f138626e96d4fa2e9284
+def train_model(model, criterion, optimizer, lr_scheduler,dset_loaders,\
+dset_sizes,writer,use_gpu=True, num_epochs=25,batch_size=4,num_log=100,\
+init_lr=0.001,lr_decay_epoch=7,multilabel=False,multi_prob=False):
     since = time.time()
 
     best_model = model
@@ -60,7 +58,7 @@ def train_model(model, criterion, optimizer, lr_scheduler,dset_loaders,dset_size
             if phase == 'train':
                 batch_count=0
                 if lr_scheduler is not None:
-                    optimizer = lr_scheduler(optimizer, epoch,init_lr=init_lr)
+                    optimizer = lr_scheduler(optimizer, epoch,init_lr=init_lr,lr_decay_epoch=lr_decay_epoch)
                 model.train(True)  # Set model to training mode
             else:
                 model.train(False)  # Set model to evaluate mode
@@ -88,16 +86,26 @@ def train_model(model, criterion, optimizer, lr_scheduler,dset_loaders,dset_size
                 # forward
                 outputs = model(inputs)
                 _, preds = torch.max(outputs.data, 1)
+                if(not multilabel):
+                    loss = criterion(outputs, labels)
+                else:
+                    labels_multi=[]
+                    for label in labels.data:
+                        label_multi=np.zeros(11)
+                        
+                        
+                        if(multi_prob):
+                            label_multi[label]=.5
+                            label_multi[label+1]=1
+                            label_multi[label+2]=.5
+                        else:
+                            label_multi[label:label+3]=1
 
-                labels_multi=[]
-                for label in labels.data:
-                    label_multi=np.zeros(11)
-                    label_multi[label:label+3]=1
-                    label_multi=label_multi[1:-1]
-                    labels_multi.append(label_multi)
-                labelsv = Variable(torch.FloatTensor(labels_multi).cuda()).view(-1,9)
-
-                loss = criterion(outputs, labelsv)
+                        
+                        label_multi=label_multi[1:-1]
+                        labels_multi.append(label_multi)
+                    labelsv = Variable(torch.FloatTensor(labels_multi).cuda()).view(-1,9)
+                    loss = criterion(outputs, labelsv)
 
                 # backward + optimize only if in training phase
                 if phase == 'train':
