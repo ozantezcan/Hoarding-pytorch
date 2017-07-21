@@ -158,7 +158,10 @@ init_lr=0.001,lr_decay_epoch=7,multilabel=False,multi_prob=False):
     print('Best val Acc: {:4f}'.format(best_acc))
     return best_model
 
-def train_model_balanced(model, criterion, optimizer, lr_scheduler,dset_loaders,use_gpu=True, num_epochs=25,num_train=100,num_test=10,batch_size=4):
+def train_model_balanced(model, criterion, optimizer, lr_scheduler,dset_loaders,\
+                         dset_sizes,writer,use_gpu=True, num_epochs=25,batch_size=4,\
+                         num_train=100, num_test=10,init_lr=0.001,lr_decay_epoch=7,\
+                         multilabel=False, multi_prob=False):
     since = time.time()
 
     best_model = model
@@ -170,7 +173,8 @@ def train_model_balanced(model, criterion, optimizer, lr_scheduler,dset_loaders,
             # Iterate over data.
         batch_count=0
         #
-        optimizer = lr_scheduler(optimizer, epoch)
+        if lr_scheduler is not None:
+            optimizer = lr_scheduler(optimizer, epoch, init_lr=init_lr, lr_decay_epoch=lr_decay_epoch)
         model.train(True)  # Set model to training mode
         for opt_iter in range(num_test):  
             running_loss = 0.0
@@ -194,7 +198,24 @@ def train_model_balanced(model, criterion, optimizer, lr_scheduler,dset_loaders,
                 # forward
                 outputs = model(inputs)
                 _, preds = torch.max(outputs.data, 1)
-                loss = criterion(outputs, labels)
+                if (not multilabel):
+                    loss = criterion(outputs, labels)
+                else:
+                    labels_multi = []
+                    for label in labels.data:
+                        label_multi = np.zeros(11)
+
+                        if(multi_prob):
+                            label_multi[label] = .5
+                            label_multi[label + 1] = 1
+                            label_multi[label + 2] = .5
+                        else:
+                            label_multi[label:label + 3] = 1
+
+                        label_multi = label_multi[1:-1]
+                        labels_multi.append(label_multi)
+                    labelsv = Variable(torch.FloatTensor(labels_multi).cuda()).view(-1, 9)
+                    loss = criterion(outputs, labelsv)
 
                 # backward + optimize only if in training phase           
                 loss.backward()
@@ -208,9 +229,12 @@ def train_model_balanced(model, criterion, optimizer, lr_scheduler,dset_loaders,
             epoch_loss = running_loss / (num_train*batch_size)
             epoch_acc = running_corrects / (num_train*batch_size)
             epoch_cir1 = running_cir1 / (num_train*batch_size)
+            writer.add_scalar('train loss', epoch_loss, epoch)
+            writer.add_scalar('train accuracy', epoch_acc, epoch)
+            writer.add_scalar('train CIR-1', epoch_cir1, epoch)
 
-            print('{}/{}, CIR-1: {:.4f}'
-                  .format(k,num_train,epoch_cir1))
+            print('{}/{}, Loss: {:.4f} Acc: {:.4f} CIR-1: {:.4f}'
+                  .format(opt_iter+1, num_test, epoch_loss, epoch_acc, epoch_cir1))
 
             # deep copy the model
         model.train(False)  # Set model to evaluate mode
@@ -235,7 +259,24 @@ def train_model_balanced(model, criterion, optimizer, lr_scheduler,dset_loaders,
             # forward
             outputs = model(inputs)
             _, preds = torch.max(outputs.data, 1)
-            loss = criterion(outputs, labels)
+            if (not multilabel):
+                loss = criterion(outputs, labels)
+            else:
+                labels_multi = []
+                for label in labels.data:
+                    label_multi = np.zeros(11)
+
+                    if (multi_prob):
+                        label_multi[label] = .5
+                        label_multi[label + 1] = 1
+                        label_multi[label + 2] = .5
+                    else:
+                        label_multi[label:label + 3] = 1
+
+                    label_multi = label_multi[1:-1]
+                    labels_multi.append(label_multi)
+                labelsv = Variable(torch.FloatTensor(labels_multi).cuda()).view(-1, 9)
+                loss = criterion(outputs, labelsv)
 
             # statistics
             running_loss += loss.data[0]
@@ -245,6 +286,9 @@ def train_model_balanced(model, criterion, optimizer, lr_scheduler,dset_loaders,
         epoch_loss = running_loss / dset_sizes['val']
         epoch_acc = running_corrects / dset_sizes['val']
         epoch_cir1 = running_cir1 / dset_sizes['val']
+        writer.add_scalar('val loss', epoch_loss, epoch)
+        writer.add_scalar('val accuracy', epoch_acc, epoch)
+        writer.add_scalar('val CIR-1', epoch_cir1, epoch)
 
         print('Val Loss: {:.4f} Acc: {:.4f} CIR-1: {:.4f}'.format(epoch_loss, epoch_acc, epoch_cir1))
 
@@ -260,6 +304,8 @@ def train_model_balanced(model, criterion, optimizer, lr_scheduler,dset_loaders,
         time_elapsed // 60, time_elapsed % 60))
     print('Best val Acc: {:4f}'.format(best_acc))
     return best_model
+
+
 
 def exp_lr_scheduler(optimizer, epoch, init_lr=0.001, lr_decay_epoch=7):
     """Decay learning rate by a factor of 0.1 every lr_decay_epoch epochs."""
