@@ -306,6 +306,168 @@ def train_model_balanced(model, criterion, optimizer, lr_scheduler,dset_loaders,
     return best_model
 
 
+def train_model_both(model, criterion, optimizer, lr_scheduler, dset_loaders_real, \
+                         dset_sizes_real, dset_loaders_synthetic, dset_sizes_synthetic,\
+                         writer, use_gpu=True, num_epochs=25, batch_size=4, \
+                         num_train=100, num_test=10, init_lr=0.001, lr_decay_epoch=7, \
+                         multilabel=False, multi_prob=False):
+    batch_size = batch_size*2
+    since = time.time()
+
+    best_model = model
+    best_acc = 0.0
+
+    for epoch in range(num_epochs):
+        print('Epoch {}/{}'.format(epoch, num_epochs - 1))
+        print('-' * 10)
+        # Iterate over data.
+        batch_count = 0
+        #
+        if lr_scheduler is not None:
+            optimizer = lr_scheduler(optimizer, epoch, init_lr=init_lr, lr_decay_epoch=lr_decay_epoch)
+        model.train(True)  # Set model to training mode
+        for opt_iter in range(num_test):
+            running_loss = 0.0
+            running_corrects = 0
+            running_cir1 = 0
+
+            for k in range(num_train):
+                # get the inputs
+                inputs_real, labels_real = next(iter(dset_loaders_real['train']))
+                inputs_synthetic, labels_synthetic = next(iter(dset_loaders_synthetic['train']))
+                inputs = torch.cat([inputs_real, inputs_synthetic], 0)
+                labels = torch.cat([labels_real, labels_synthetic], 0)
+
+                # wrap them in Variable
+                if use_gpu:
+                    inputs, labels = Variable(inputs.cuda()), \
+                                     Variable(labels.cuda())
+                else:
+                    inputs, labels = Variable(inputs), Variable(labels)
+
+                # zero the parameter gradients
+                optimizer.zero_grad()
+
+                # forward
+                outputs = model(inputs)
+                _, preds = torch.max(outputs.data, 1)
+                if (not multilabel):
+                    loss = criterion(outputs, labels)
+                else:
+                    labels_multi = []
+                    for label in labels.data:
+                        label_multi = np.zeros(11)
+
+                        if (multi_prob):
+                            label_multi[label] = .5
+                            label_multi[label + 1] = 1
+                            label_multi[label + 2] = .5
+                        else:
+                            label_multi[label:label + 3] = 1
+
+                        label_multi = label_multi[1:-1]
+                        labels_multi.append(label_multi)
+                    labelsv = Variable(torch.FloatTensor(labels_multi).cuda()).view(-1, 9)
+                    loss = criterion(outputs, labelsv)
+
+                # backward + optimize only if in training phase
+                loss.backward()
+                optimizer.step()
+
+                # statistics
+                running_loss += loss.data[0]
+                running_corrects += torch.sum(preds == labels.data)
+                running_cir1 += torch.sum(torch.abs(preds - labels.data) <= 1)
+
+            epoch_loss = running_loss / (num_train * batch_size)
+            epoch_acc = running_corrects / (num_train * batch_size)
+            epoch_cir1 = running_cir1 / (num_train * batch_size)
+            writer.add_scalar('train loss', epoch_loss, epoch)
+            writer.add_scalar('train accuracy', epoch_acc, epoch)
+            writer.add_scalar('train CIR-1', epoch_cir1, epoch)
+
+            print('{}/{}, Loss: {:.4f} Acc: {:.4f} CIR-1: {:.4f}'
+                  .format(opt_iter + 1, num_test, epoch_loss, epoch_acc, epoch_cir1))
+
+            # deep copy the model
+        model.train(False)  # Set model to evaluate mode
+
+
+        test_count = 0
+        for loader in [dset_loaders_real, dset_loaders_synthetic]:
+            running_loss = 0.0
+            running_corrects = 0
+            running_cir1 = 0
+            test_count += 1
+            for data in loader['val']:
+                # get the inputs
+                inputs, labels = data
+
+                # wrap them in Variable
+                if use_gpu:
+                    inputs, labels = Variable(inputs.cuda()), \
+                                     Variable(labels.cuda())
+                else:
+                    inputs, labels = Variable(inputs), Variable(labels)
+
+                # zero the parameter gradients
+                optimizer.zero_grad()
+
+                # forward
+                outputs = model(inputs)
+                _, preds = torch.max(outputs.data, 1)
+                if (not multilabel):
+                    loss = criterion(outputs, labels)
+                else:
+                    labels_multi = []
+                    for label in labels.data:
+                        label_multi = np.zeros(11)
+
+                        if (multi_prob):
+                            label_multi[label] = .5
+                            label_multi[label + 1] = 1
+                            label_multi[label + 2] = .5
+                        else:
+                            label_multi[label:label + 3] = 1
+
+                        label_multi = label_multi[1:-1]
+                        labels_multi.append(label_multi)
+                    labelsv = Variable(torch.FloatTensor(labels_multi).cuda()).view(-1, 9)
+                    loss = criterion(outputs, labelsv)
+
+                # statistics
+                running_loss += loss.data[0]
+                running_corrects += torch.sum(preds == labels.data)
+                running_cir1 += torch.sum(torch.abs(preds - labels.data) <= 1)
+            if(test_count==1):
+                epoch_loss = running_loss / dset_sizes_real['val']
+                epoch_acc = running_corrects / dset_sizes_real['val']
+                epoch_cir1 = running_cir1 / dset_sizes_real['val']
+                writer.add_scalar('real val loss', epoch_loss, epoch)
+                writer.add_scalar('real val accuracy', epoch_acc, epoch)
+                writer.add_scalar('real val CIR-1', epoch_cir1, epoch)
+                print('Real Val Loss: {:.4f} Acc: {:.4f} CIR-1: {:.4f}'.format(epoch_loss, epoch_acc, epoch_cir1))
+            if (test_count == 2):
+                epoch_loss = running_loss / dset_sizes_synthetic['val']
+                epoch_acc = running_corrects / dset_sizes_synthetic['val']
+                epoch_cir1 = running_cir1 / dset_sizes_synthetic['val']
+                writer.add_scalar('synthetic val loss', epoch_loss, epoch)
+                writer.add_scalar('synthetic val accuracy', epoch_acc, epoch)
+                writer.add_scalar('synthetic val CIR-1', epoch_cir1, epoch)
+                print('Synthetic Val Loss: {:.4f} Acc: {:.4f} CIR-1: {:.4f}'.format(epoch_loss, epoch_acc, epoch_cir1))
+
+        if epoch_acc > best_acc:
+            best_acc = epoch_acc
+            best_model = copy.deepcopy(model)
+
+        print()
+
+    time_elapsed = time.time() - since
+    print('Training complete in {:.0f}m {:.0f}s'.format(
+        time_elapsed // 60, time_elapsed % 60))
+    print('Best val Acc: {:4f}'.format(best_acc))
+    return model
+
 
 def exp_lr_scheduler(optimizer, epoch, init_lr=0.001, lr_decay_epoch=7):
     """Decay learning rate by a factor of 0.1 every lr_decay_epoch epochs."""
