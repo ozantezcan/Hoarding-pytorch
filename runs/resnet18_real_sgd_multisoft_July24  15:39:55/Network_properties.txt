@@ -1,0 +1,11 @@
+Dataset: real
+Network: resnet18
+Uniform sampler: False
+Criterion: multisoft
+Learning rate: 0.0001
+Momentum: 0.9
+Leraning Rate Scheduler: <function exp_lr_scheduler at 0x7f1891f5cbf8>
+Leraning Rate Decay Period: 10
+Network is pretrained: True
+Network laoded from: resnet18_synthetic_sgd_multisoft_July22  16:05:30
+MSE loss function: True

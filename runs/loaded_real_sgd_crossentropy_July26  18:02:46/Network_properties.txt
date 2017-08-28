@@ -1,0 +1,11 @@
+Dataset: real
+Network: loaded
+Uniform sampler: False
+Criterion: crossentropy
+Learning rate: 0.01
+Momentum: 0.9
+Leraning Rate Scheduler: <function exp_lr_scheduler at 0x7f078beb6ea0>
+Leraning Rate Decay Period: 10
+Network is pretrained: True
+Network laoded from: resnet50_mit_indoor_sgd_crossentropy_July26  10:31:05
+MSE loss function: False
