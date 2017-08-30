@@ -34,13 +34,18 @@ def subsetCreator(rootdir,im_per_room=10,roomdirs=['//BR//','//Kitchen//','//LR/
                 if os.path.exists(parentdir):
                     imdirs_c=os.listdir(parentdir)
                     if(len(imdirs_c)>0):
-                        rand_idx=np.floor(np.random.rand(im_per_room)*len(imdirs_c)).astype(np.int)
+                        if im_per_room==0:
+                            rand_idx=range(len(imdirs_c))
+                        else:
+                            rand_idx=np.floor(np.random.rand(im_per_room)*len(imdirs_c)).astype(np.int)
                         for idx in rand_idx:
                             imdirs.append(parentdir+'//'+imdirs_c[idx])
                             house.append(hme+1)
                             room.append(rm+1)
                             cir.append(cr+1)
     return np.asarray(imdirs), np.asarray(cir), np.asarray(house), np.asarray(room)
+
+
 
 def torchFromDirs(imdirs,im_dims=[224,224,3],begin_idx=0,batch_size=16):
     if len(imdirs)<begin_idx:
