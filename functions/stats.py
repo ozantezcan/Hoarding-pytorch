@@ -2,11 +2,17 @@ from __future__ import print_function, division
 
 import torch
 from torch.autograd import Variable
+from torchvision import transforms
 import numpy as np
 import matplotlib.pyplot as plt
 import os
 from PIL import Image
 
+default_transform=transforms.Compose([
+        transforms.Scale(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
 
 def im2torchNorm(imdir,mean = np.array([0.485, 0.456, 0.406]),std = np.array([0.229, 0.224, 0.225])\
                  ,imsize=(256,256),imMax=255.):
@@ -16,6 +22,11 @@ def im2torchNorm(imdir,mean = np.array([0.485, 0.456, 0.406]),std = np.array([0.
     im=im[16:240,16:240,:]
     im_norm=(im-mean)/std
     return im_norm
+
+
+def im2torchTransform(imdir, transform=default_transform):
+    im = Image.open(imdir)
+    return transform(im).numpy().transpose(1,2,0)
 
 def subsetCreator(rootdir,im_per_room=10,roomdirs=['//BR//','//Kitchen//','//LR//'],multi_dir=True):
     if(multi_dir):
@@ -54,7 +65,7 @@ def torchFromDirs(imdirs,im_dims=[224,224,3],begin_idx=0,batch_size=16):
         batch_size=len(imdirs)-begin_idx
     imgs=np.zeros([batch_size]+im_dims)
     for k in range(batch_size):
-        imgs[k,:,:,:]=im2torchNorm(imdirs[begin_idx+k])
+        imgs[k,:,:,:]=im2torchTransform(imdirs[begin_idx+k])
 
     im_torch=Variable(torch.from_numpy(imgs.transpose(0,3,1,2)).cuda()).float()
     return im_torch
