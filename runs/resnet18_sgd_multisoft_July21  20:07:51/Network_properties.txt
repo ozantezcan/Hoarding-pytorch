@@ -1,8 +1,0 @@
-Dataset: both
-Network: resnet18
-Uniform sampler: True
-Criterion: multisoft
-Learning rate: 0.01
-Momentum: 0.9
-Leraning Rate Scheduler: None
-Leraning Rate Decay Period: 12
